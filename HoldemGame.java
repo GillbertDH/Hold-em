@@ -24,6 +24,75 @@ public class HoldemGame {
         
 		communityCards = new ArrayList<>();
 	}
+
+	public boolean checkFoldGameEnd() {
+		Player hero = players.get(0);
+		Player villan = players.get(1);
+
+		if (hero.isFold()) {
+			System.out.println("\n[결과] Hero가 폴드했습니다. Villain이 판돈 " + pot + " 달러를 획득합니다!");
+			villan.win(pot);
+			return true;
+		} else if (villan.isFold()) {
+			System.out.println("\n[결과] Villain이 폴드했습니다. Hero가 판돈 " + pot + " 달러를 획득합니다!");
+			hero.win(pot);
+			return true;
+		}
+		return false;
+	}
+
+	public void bettingRound(String roundName) {
+		System.out.println("\n=== [" + roundName + " 베팅 시작] ===");
+        
+		for (Player p : players) p.initRound();
+        
+		int currentHighestBet = 0;
+		boolean actionNeeded = true;
+        
+		while (actionNeeded) {
+			actionNeeded = false;
+            
+			for (Player p : players) {
+				if (p.isFold()) continue;
+				if (checkFoldGameEnd()) return;
+                
+				if (p.getCurrentBet() < currentHighestBet || currentHighestBet == 0) {
+					actionNeeded = true;
+                    
+					System.out.println("\n▶ [" + p.getName() + "]님의 차례 (잔액: " + p.getAccount() + ")");
+					int needToCall = currentHighestBet - p.getCurrentBet();
+					System.out.println("현재 최고 베팅액: " + currentHighestBet + " (콜하려면 " + needToCall + " 필요)");
+					System.out.println("1. 폴드(Fold)  2. 콜/체크(Call/Check)  3. 레이즈(Raise)");
+					System.out.print("선택: ");
+                    
+					int choice = sc.nextInt();
+					if (choice == 1) {
+						System.out.println(p.getName() + " 폴드!");
+						p.fold();
+					} 
+					else if (choice == 2) {
+						if (needToCall > p.getAccount()) needToCall = p.getAccount();
+						p.bet(needToCall);
+						pot += needToCall;
+						System.out.println(p.getName() + " 콜/체크! (지불: " + needToCall + " | 팟: " + pot + ")");
+					} 
+					else if (choice == 3) {
+						System.out.print("추가로 얼마를 더 올리겠습니까?: ");
+						int raiseAmount = sc.nextInt();
+						int totalToPay = needToCall + raiseAmount;
+                        
+						if (totalToPay > p.getAccount()) totalToPay = p.getAccount();
+						p.bet(totalToPay);
+						pot += totalToPay;
+                        
+						currentHighestBet = p.getCurrentBet();
+						System.out.println(p.getName() + " 레이즈! (지불: " + totalToPay + " | 팟: " + pot + ")");
+					}
+				}
+			}
+			if (currentHighestBet == 0 && !actionNeeded) break; 
+		}
+	}
     
 	public void run() {
 		System.out.println("\n===홀덤 게임을 시작합니다...===");
@@ -36,19 +105,27 @@ public class HoldemGame {
 		Player hero = players.get(0);
 		hero.showHands();
 		Player villan = players.get(1);
-        
-		hero.bet(10);
-		villan.bet(10);
-		pot += 20;
+
+		bettingRound("프리플랍");
+		if (checkFoldGameEnd()) return;
         
 		for(int i=0; i<3; i++) communityCards.add(deck.draw());
 		System.out.println("\n 보드(플랍): " + communityCards);
         
+		bettingRound("플랍");
+		if (checkFoldGameEnd()) return;
+
 		communityCards.add(deck.draw());
-		System.out.println(" 보드(플랍+턴): " + communityCards);
+		System.out.println("\n 보드(플랍+턴): " + communityCards);
         
+		bettingRound("턴");
+		if (checkFoldGameEnd()) return;
+
 		communityCards.add(deck.draw());
-		System.out.println(" 보드(플랍+턴+리버): " + communityCards);
+		System.out.println("\n 보드(플랍+턴+리버): " + communityCards);
+        
+		bettingRound("리버");
+		if (checkFoldGameEnd()) return;
         
 		List<Card> heroTotalCards = new ArrayList<>();
 		List<Card> villanTotalCards = new ArrayList<>();
@@ -76,9 +153,11 @@ public class HoldemGame {
 			villan.win(pot);
 		} else {
 			System.out.println("무승부 (Chop)!");
+			hero.win(pot / 2);
+			villan.win(pot / 2);
 		}
         
-		System.out.println(hero.getAccount());
+		System.out.println("\n[최종 잔액] Hero: " + hero.getAccount() + " | Villain: " + villan.getAccount());
 	}
     
 	public HandResult evaluatehands(List<Card> totalCards) {
