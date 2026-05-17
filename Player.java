@@ -53,4 +53,7 @@ public class Player {
 
 	public String getName() { return name; }
     public int getAccount() { return account; }
+    
+    public int getCurrentBet() { return currentBet; }
+    public boolean isFold() { return isFold; }
 }
