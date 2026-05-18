@@ -65,7 +65,19 @@ public class HoldemGame {
 					System.out.println("1. 폴드(Fold)  2. 콜/체크(Call/Check)  3. 레이즈(Raise)");
 					System.out.print("선택: ");
                     
-					int choice = sc.nextInt();
+					int choice = 0;
+					if (p.getName().equals("Villan")) {
+						System.out.println("\n빌런(Villain)이 고민 중입니다...");
+						try { Thread.sleep(1500); } catch(Exception e){}
+                        
+						int rand = (int)(Math.random() * 10);
+						if (rand < 1) choice = 1;      
+						else if (rand < 8) choice = 2; 
+						else choice = 3;               
+					} else {
+						choice = sc.nextInt(); 
+					}
+                    
 					if (choice == 1) {
 						System.out.println(p.getName() + " 폴드!");
 						p.fold();
@@ -77,8 +89,15 @@ public class HoldemGame {
 						System.out.println(p.getName() + " 콜/체크! (지불: " + needToCall + " | 팟: " + pot + ")");
 					} 
 					else if (choice == 3) {
-						System.out.print("추가로 얼마를 더 올리겠습니까?: ");
-						int raiseAmount = sc.nextInt();
+						int raiseAmount = 0;
+						if (p.getName().equals("Villan")) {
+							raiseAmount = (int)(Math.random() * 21) + 10; 
+							System.out.println("추가로 얼마를 더 올리겠습니까?: " + raiseAmount + " (빌런 자동 선택)");
+						} else {
+							System.out.print("추가로 얼마를 더 올리겠습니까?: ");
+							raiseAmount = sc.nextInt();
+						}
+                        
 						int totalToPay = needToCall + raiseAmount;
                         
 						if (totalToPay > p.getAccount()) totalToPay = p.getAccount();
