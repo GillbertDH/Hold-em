@@ -19,7 +19,8 @@ jobs:
         java-version: '17'
         distribution: 'temurin'
 
-    - name: 자바 파일 컴파일 및 실행 (여기를 수정하세요)
+    
+    - name: 자바 파일 컴파일 및 실행 (수정됨)
       run: |
-        javac TestMain.java
-        java TestMain
+        javac -d . *.java
+        java 숙제7.TestMain
