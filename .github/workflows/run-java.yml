@@ -1,0 +1,26 @@
+name: Run Java Code
+
+# main 브랜치에 코드가 Push 될 때마다 실행됩니다.
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-run:
+    runs-on: ubuntu-latest # 최신 리눅스 환경에서 실행
+
+    steps:
+    - name: 내 코드 가져오기
+      uses: actions/checkout@v4
+
+    - name: JDK 17 설치하기
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    
+    - name: 자바 파일 컴파일 및 실행 (수정됨)
+      run: |
+        javac -d . *.java
+        java 숙제7.TestMain
