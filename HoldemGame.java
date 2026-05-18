@@ -40,7 +40,6 @@ public class HoldemGame {
 		}
 		return false;
 	}
-
 	
 	public void bettingRound(String roundName) {
 		System.out.println("\n=== [" + roundName + " 베팅 시작] ===");
