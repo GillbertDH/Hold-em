@@ -9,7 +9,7 @@ public class HoldemGame {
 	private Deck deck;
 	private List<Player> players;
 	private List<Card> communityCards;
-	private int dealerIdx = 0; // 🔥 [추가됨] 딜러 버튼 위치 (0: Hero, 1: Villain)
+	private int dealerIdx = 0;
     
 	public void init() {
 		pot = 0;
@@ -43,7 +43,6 @@ public class HoldemGame {
 		return false;
 	}
 
-	// 🔥 [추가됨] 게임이 끝난 후 한 판 더 할지 물어보는 메서드
 	private boolean askNextHand() {
 		System.out.print("\n다음 핸드를 진행하시겠습니까? (1: 계속하기, 2: 그만하기): ");
 		int choice = sc.nextInt();
@@ -51,28 +50,30 @@ public class HoldemGame {
 	}
 
 	public void bettingRound(String roundName) {
+		// 🔥 [올인 픽스 1] 이미 누군가 올인 상태라면, 남은 베팅은 모두 생략하고 남은 카드를 공짜로 오픈!
+		if (players.get(0).getAccount() == 0 || players.get(1).getAccount() == 0) {
+			System.out.println("\n=== [" + roundName + " 베팅 생략 (올인 승부 진행 중!)] ===");
+			return;
+		}
+
 		System.out.println("\n=== [" + roundName + " 베팅 시작] ===");
         
 		int currentHighestBet = 0;
-		
-		// 프리플랍일 때는 블라인드가 이미 깔려 있으므로 최고 베팅액을 10으로 설정
 		if (roundName.equals("프리플랍")) {
-			currentHighestBet = 10;
+			// 🔥 [올인 픽스 2] 블라인드로 인해 올인될 수 있으므로, 실제 낸 돈 중 최대값을 기준액으로 설정
+			currentHighestBet = Math.max(players.get(0).getCurrentBet(), players.get(1).getCurrentBet());
 		} else {
 			for (Player p : players) p.initRound();
 		}
         
-		// 🔥 [핵심 추가] 딜러 버튼에 따라 베팅 순서 결정 로직 (헤즈업 룰 적용)
 		List<Player> roundOrder = new ArrayList<>();
 		Player hero = players.get(0);
 		Player villan = players.get(1);
 
 		if (roundName.equals("프리플랍")) {
-			// 프리플랍: 스몰 블라인드(딜러)가 먼저 액션
 			if (dealerIdx == 0) { roundOrder.add(hero); roundOrder.add(villan); } 
 			else { roundOrder.add(villan); roundOrder.add(hero); }
 		} else {
-			// 플랍 이후: 빅 블라인드가 먼저 액션
 			if (dealerIdx == 0) { roundOrder.add(villan); roundOrder.add(hero); } 
 			else { roundOrder.add(hero); roundOrder.add(villan); }
 		}
@@ -84,13 +85,12 @@ public class HoldemGame {
 			actionNeeded = false;
             
 			for (Player p : roundOrder) {
-				if (p.isFold()) continue;
-				if (checkFoldGameEnd()) return;
+				// 🔥 [올인 픽스 3] 폴드했거나 "돈이 없는(올인)" 플레이어에게는 더 이상 묻지 않음!
+				if (p.isFold() || p.getAccount() == 0) continue;
                 
-				// 내가 낸 돈이 부족하거나, 아직 이번 라운드에 내 턴이 한 번도 안 왔을 때
 				if (p.getCurrentBet() < currentHighestBet || !actedPlayers.contains(p)) {
 					actionNeeded = true;
-					actedPlayers.add(p); // 이 플레이어는 액션을 취했음을 기록
+					actedPlayers.add(p);
                     
 					System.out.println("\n▶ [" + p.getName() + "]님의 차례 (잔액: " + p.getAccount() + ")");
 					int needToCall = currentHighestBet - p.getCurrentBet();
@@ -137,10 +137,25 @@ public class HoldemGame {
 						p.bet(totalToPay);
 						pot += totalToPay;
                         
-						currentHighestBet = p.getCurrentBet();
+						currentHighestBet = Math.max(currentHighestBet, p.getCurrentBet());
 						System.out.println(p.getName() + " 레이즈! (지불: " + totalToPay + " | 팟: " + pot + ")");
 					}
 				}
+			}
+		}
+
+		// 🔥 [올인 픽스 4] 베팅 라운드 종료 후, 올인으로 인해 남게 된 초과 베팅금을 상대방에게 즉시 반환!
+		int heroBet = hero.getCurrentBet();
+		int villanBet = villan.getCurrentBet();
+		if (heroBet != villanBet) {
+			int diff = Math.abs(heroBet - villanBet);
+			pot -= diff;
+			if (heroBet > villanBet) {
+				hero.win(diff);
+				System.out.println("\n[시스템] 상대방의 올인으로 매칭되지 않은 초과액 " + diff + "달러가 Hero에게 반환되었습니다.");
+			} else {
+				villan.win(diff);
+				System.out.println("\n[시스템] 상대방의 올인으로 매칭되지 않은 초과액 " + diff + "달러가 Villain에게 반환되었습니다.");
 			}
 		}
 	}
@@ -150,9 +165,7 @@ public class HoldemGame {
 		Player villan = players.get(1);
 		int handCount = 1;
 
-		// 🔥 [핵심 추가] 카지노 무한 루프 시작
 		while (true) {
-			// 1. 파산 체크
 			if (hero.getAccount() <= 0) {
 				System.out.println("\n[게임 종료] Hero가 파산했습니다! Villain의 최종 승리!");
 				break;
@@ -162,27 +175,25 @@ public class HoldemGame {
 				break;
 			}
 
-			// 2. 새 게임 세팅
 			System.out.println("\n==================================");
 			System.out.println("♣♠♦♥ 제 " + handCount + " 핸드 시작 ♥♦♠♣");
 			System.out.println("==================================");
 			System.out.println("Hero 잔액: " + hero.getAccount() + " | Villain 잔액: " + villan.getAccount());
 			System.out.println("현재 딜러 버튼 위치: " + (dealerIdx == 0 ? "Hero" : "Villain"));
 
-			deck = new Deck(); // 덱 새로 뜯기
+			deck = new Deck();
 			deck.shuffle();
 			communityCards.clear();
 			hero.resetForNewHand();
 			villan.resetForNewHand();
 			pot = 0;
 
-			// 3. 블라인드 포스팅
 			Player sbPlayer = (dealerIdx == 0) ? hero : villan;
 			Player bbPlayer = (dealerIdx == 0) ? villan : hero;
 
 			System.out.println("\n--- 블라인드 포스팅 ---");
-			int sbAmount = Math.min(5, sbPlayer.getAccount()); // 스몰 블라인드 5
-			int bbAmount = Math.min(10, bbPlayer.getAccount()); // 빅 블라인드 10
+			int sbAmount = Math.min(5, sbPlayer.getAccount());
+			int bbAmount = Math.min(10, bbPlayer.getAccount());
 
 			sbPlayer.bet(sbAmount);
 			bbPlayer.bet(bbAmount);
@@ -199,7 +210,6 @@ public class HoldemGame {
         
 			hero.showHands();
 
-			// 4. 베팅 라운드 및 폴드 체크 (폴드 시 즉시 다음 판으로)
 			bettingRound("프리플랍");
 			if (hero.isFold() || villan.isFold()) {
 				if (!askNextHand()) break;
@@ -241,7 +251,6 @@ public class HoldemGame {
 				continue;
 			}
         
-			// 5. 쇼다운 및 족보 판별
 			List<Card> heroTotalCards = new ArrayList<>();
 			List<Card> villanTotalCards = new ArrayList<>();
         
@@ -274,11 +283,10 @@ public class HoldemGame {
         
 			System.out.println("\n[핸드 정산 완료] Hero 잔액: " + hero.getAccount() + " | Villain 잔액: " + villan.getAccount());
 
-			// 6. 다음 판 진행 여부 확인 및 딜러 버튼 교대
 			if (!askNextHand()) break;
-			dealerIdx = 1 - dealerIdx; // 0과 1을 번갈아가며 스위칭
+			dealerIdx = 1 - dealerIdx;
 			handCount++;
-		} // 무한 루프 끝
+		}
 	}
     
 	public HandResult evaluatehands(List<Card> totalCards) {
