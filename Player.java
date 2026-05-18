@@ -5,7 +5,6 @@ import java.util.List;
 
 public class Player {
 
-    // 이름, 소유칩, 카드(2장)
     private String name;
     private int account;
     private final List<Card> hands;
@@ -29,11 +28,16 @@ public class Player {
     	currentBet = 0;
     }
     
+    public void resetForNewHand() {
+        this.hands.clear();
+        this.isFold = false;
+        this.currentBet = 0;
+    }
+    
     public Player(String name, int account) {
         this.name = name;
         this.account = account;
         hands = new ArrayList<>();
-        
     }
     
     public void receiveCard(Card card) {
@@ -44,7 +48,6 @@ public class Player {
     	System.out.println();
         System.out.print(name + "님의 핸드: ");
         System.out.println(hands);
-        
     }
     
     public List<Card> getHands() {
