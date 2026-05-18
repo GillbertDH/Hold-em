@@ -28,6 +28,7 @@ public class Player {
     	currentBet = 0;
     }
     
+    // 🔥 [추가됨] 새로운 핸드가 시작될 때 카드와 베팅 상태를 싹 비워주는 메서드
     public void resetForNewHand() {
         this.hands.clear();
         this.isFold = false;

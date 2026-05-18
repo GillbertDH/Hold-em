@@ -9,9 +9,11 @@ public class HoldemGame {
 	private Deck deck;
 	private List<Player> players;
 	private List<Card> communityCards;
+	private int dealerIdx = 0; // 🔥 [추가됨] 딜러 버튼 위치 (0: Hero, 1: Villain)
     
 	public void init() {
 		pot = 0;
+		dealerIdx = 0;
 		System.out.println("===홀덤 게임을 세팅합니다...===");
 		deck = new Deck();
 		deck.shuffle();
@@ -40,26 +42,55 @@ public class HoldemGame {
 		}
 		return false;
 	}
-	
+
+	// 🔥 [추가됨] 게임이 끝난 후 한 판 더 할지 물어보는 메서드
+	private boolean askNextHand() {
+		System.out.print("\n다음 핸드를 진행하시겠습니까? (1: 계속하기, 2: 그만하기): ");
+		int choice = sc.nextInt();
+		return choice == 1;
+	}
+
 	public void bettingRound(String roundName) {
 		System.out.println("\n=== [" + roundName + " 베팅 시작] ===");
         
-		for (Player p : players) p.initRound();
-        
 		int currentHighestBet = 0;
+		
+		// 프리플랍일 때는 블라인드가 이미 깔려 있으므로 최고 베팅액을 10으로 설정
+		if (roundName.equals("프리플랍")) {
+			currentHighestBet = 10;
+		} else {
+			for (Player p : players) p.initRound();
+		}
+        
+		// 🔥 [핵심 추가] 딜러 버튼에 따라 베팅 순서 결정 로직 (헤즈업 룰 적용)
+		List<Player> roundOrder = new ArrayList<>();
+		Player hero = players.get(0);
+		Player villan = players.get(1);
+
+		if (roundName.equals("프리플랍")) {
+			// 프리플랍: 스몰 블라인드(딜러)가 먼저 액션
+			if (dealerIdx == 0) { roundOrder.add(hero); roundOrder.add(villan); } 
+			else { roundOrder.add(villan); roundOrder.add(hero); }
+		} else {
+			// 플랍 이후: 빅 블라인드가 먼저 액션
+			if (dealerIdx == 0) { roundOrder.add(villan); roundOrder.add(hero); } 
+			else { roundOrder.add(hero); roundOrder.add(villan); }
+		}
+
+		Set<Player> actedPlayers = new HashSet<>();
 		boolean actionNeeded = true;
-		boolean firstRound = true; // 🔥 [핵심 수정] 첫 바퀴인지 기억하는 변수 추가!
         
 		while (actionNeeded) {
 			actionNeeded = false;
             
-			for (Player p : players) {
+			for (Player p : roundOrder) {
 				if (p.isFold()) continue;
 				if (checkFoldGameEnd()) return;
                 
-				// 🔥 [핵심 수정] 첫 바퀴이거나, 내가 낸 돈이 최고액보다 적을 때만 행동!
-				if (p.getCurrentBet() < currentHighestBet || (currentHighestBet == 0 && firstRound)) {
+				// 내가 낸 돈이 부족하거나, 아직 이번 라운드에 내 턴이 한 번도 안 왔을 때
+				if (p.getCurrentBet() < currentHighestBet || !actedPlayers.contains(p)) {
 					actionNeeded = true;
+					actedPlayers.add(p); // 이 플레이어는 액션을 취했음을 기록
                     
 					System.out.println("\n▶ [" + p.getName() + "]님의 차례 (잔액: " + p.getAccount() + ")");
 					int needToCall = currentHighestBet - p.getCurrentBet();
@@ -106,80 +137,148 @@ public class HoldemGame {
 						p.bet(totalToPay);
 						pot += totalToPay;
                         
-						currentHighestBet = p.getCurrentBet(); // 여기서 최고 베팅액이 올라감!
+						currentHighestBet = p.getCurrentBet();
 						System.out.println(p.getName() + " 레이즈! (지불: " + totalToPay + " | 팟: " + pot + ")");
 					}
 				}
 			}
-			firstRound = false; // 🔥 [핵심 수정] 한 바퀴를 다 돌았으면 이제 첫 바퀴가 아님!
-			if (currentHighestBet == 0 && !actionNeeded) break; 
 		}
 	}
     
 	public void run() {
-		System.out.println("\n===홀덤 게임을 시작합니다...===");
-		System.out.println("카드를 딜링합니다...");
-        
-		for(int i=0; i<2; i++) { 
-			for (Player p : players) p.receiveCard(deck.draw()); 
-		}
-        
 		Player hero = players.get(0);
-		hero.showHands();
 		Player villan = players.get(1);
+		int handCount = 1;
 
-		bettingRound("프리플랍");
-		if (checkFoldGameEnd()) return;
-        
-		for(int i=0; i<3; i++) communityCards.add(deck.draw());
-		System.out.println("\n 보드(플랍): " + communityCards);
-        
-		bettingRound("플랍");
-		if (checkFoldGameEnd()) return;
+		// 🔥 [핵심 추가] 카지노 무한 루프 시작
+		while (true) {
+			// 1. 파산 체크
+			if (hero.getAccount() <= 0) {
+				System.out.println("\n[게임 종료] Hero가 파산했습니다! Villain의 최종 승리!");
+				break;
+			}
+			if (villan.getAccount() <= 0) {
+				System.out.println("\n[게임 종료] Villain이 파산했습니다! Hero의 최종 승리!");
+				break;
+			}
 
-		communityCards.add(deck.draw());
-		System.out.println("\n 보드(플랍+턴): " + communityCards);
-        
-		bettingRound("턴");
-		if (checkFoldGameEnd()) return;
+			// 2. 새 게임 세팅
+			System.out.println("\n==================================");
+			System.out.println("♣♠♦♥ 제 " + handCount + " 핸드 시작 ♥♦♠♣");
+			System.out.println("==================================");
+			System.out.println("Hero 잔액: " + hero.getAccount() + " | Villain 잔액: " + villan.getAccount());
+			System.out.println("현재 딜러 버튼 위치: " + (dealerIdx == 0 ? "Hero" : "Villain"));
 
-		communityCards.add(deck.draw());
-		System.out.println("\n 보드(플랍+턴+리버): " + communityCards);
-        
-		bettingRound("리버");
-		if (checkFoldGameEnd()) return;
-        
-		List<Card> heroTotalCards = new ArrayList<>();
-		List<Card> villanTotalCards = new ArrayList<>();
-        
-		heroTotalCards.addAll(hero.getHands());
-		villanTotalCards.addAll(villan.getHands());
-		heroTotalCards.addAll(communityCards);
-		villanTotalCards.addAll(communityCards);
-        
-		Collections.sort(heroTotalCards);
-		Collections.sort(villanTotalCards);
-        
-		HandResult heroResult = evaluatehands(heroTotalCards);
-		HandResult villanResult = evaluatehands(villanTotalCards);
-        
-		System.out.println("\nHero의 족보: " + heroResult);
-		System.out.println("Villain의 족보: " + villanResult);
+			deck = new Deck(); // 덱 새로 뜯기
+			deck.shuffle();
+			communityCards.clear();
+			hero.resetForNewHand();
+			villan.resetForNewHand();
+			pot = 0;
 
-		System.out.println("\n=== 결 과 ===");
-		if (heroResult.compareTo(villanResult) > 0) {
-			System.out.println("Hero 승리!");
-			hero.win(pot);
-		} else if (heroResult.compareTo(villanResult) < 0) {
-			System.out.println("Villain 승리!");
-			villan.win(pot);
-		} else {
-			System.out.println("무승부 (Chop)!");
-			hero.win(pot / 2);
-			villan.win(pot / 2);
-		}
+			// 3. 블라인드 포스팅
+			Player sbPlayer = (dealerIdx == 0) ? hero : villan;
+			Player bbPlayer = (dealerIdx == 0) ? villan : hero;
+
+			System.out.println("\n--- 블라인드 포스팅 ---");
+			int sbAmount = Math.min(5, sbPlayer.getAccount()); // 스몰 블라인드 5
+			int bbAmount = Math.min(10, bbPlayer.getAccount()); // 빅 블라인드 10
+
+			sbPlayer.bet(sbAmount);
+			bbPlayer.bet(bbAmount);
+			pot += (sbAmount + bbAmount);
+
+			System.out.println(sbPlayer.getName() + "님이 스몰 블라인드 " + sbAmount + "달러를 냅니다.");
+			System.out.println(bbPlayer.getName() + "님이 빅 블라인드 " + bbAmount + "달러를 냅니다.");
+			System.out.println("현재 테이블 판돈(Pot): " + pot);
+
+			System.out.println("\n카드를 딜링합니다...");
+			for(int i=0; i<2; i++) { 
+				for (Player p : players) p.receiveCard(deck.draw()); 
+			}
         
-		System.out.println("\n[최종 잔액] Hero: " + hero.getAccount() + " | Villain: " + villan.getAccount());
+			hero.showHands();
+
+			// 4. 베팅 라운드 및 폴드 체크 (폴드 시 즉시 다음 판으로)
+			bettingRound("프리플랍");
+			if (hero.isFold() || villan.isFold()) {
+				if (!askNextHand()) break;
+				dealerIdx = 1 - dealerIdx;
+				handCount++;
+				continue;
+			}
+        
+			for(int i=0; i<3; i++) communityCards.add(deck.draw());
+			System.out.println("\n 보드(플랍): " + communityCards);
+        
+			bettingRound("플랍");
+			if (hero.isFold() || villan.isFold()) {
+				if (!askNextHand()) break;
+				dealerIdx = 1 - dealerIdx;
+				handCount++;
+				continue;
+			}
+
+			communityCards.add(deck.draw());
+			System.out.println("\n 보드(플랍+턴): " + communityCards);
+        
+			bettingRound("턴");
+			if (hero.isFold() || villan.isFold()) {
+				if (!askNextHand()) break;
+				dealerIdx = 1 - dealerIdx;
+				handCount++;
+				continue;
+			}
+
+			communityCards.add(deck.draw());
+			System.out.println("\n 보드(플랍+턴+리버): " + communityCards);
+        
+			bettingRound("리버");
+			if (hero.isFold() || villan.isFold()) {
+				if (!askNextHand()) break;
+				dealerIdx = 1 - dealerIdx;
+				handCount++;
+				continue;
+			}
+        
+			// 5. 쇼다운 및 족보 판별
+			List<Card> heroTotalCards = new ArrayList<>();
+			List<Card> villanTotalCards = new ArrayList<>();
+        
+			heroTotalCards.addAll(hero.getHands());
+			villanTotalCards.addAll(villan.getHands());
+			heroTotalCards.addAll(communityCards);
+			villanTotalCards.addAll(communityCards);
+        
+			Collections.sort(heroTotalCards);
+			Collections.sort(villanTotalCards);
+        
+			HandResult heroResult = evaluatehands(heroTotalCards);
+			HandResult villanResult = evaluatehands(villanTotalCards);
+        
+			System.out.println("\nHero의 족보: " + heroResult);
+			System.out.println("Villain의 족보: " + villanResult);
+
+			System.out.println("\n=== 결 과 ===");
+			if (heroResult.compareTo(villanResult) > 0) {
+				System.out.println("Hero 승리!");
+				hero.win(pot);
+			} else if (heroResult.compareTo(villanResult) < 0) {
+				System.out.println("Villain 승리!");
+				villan.win(pot);
+			} else {
+				System.out.println("무승부 (Chop)!");
+				hero.win(pot / 2);
+				villan.win(pot / 2);
+			}
+        
+			System.out.println("\n[핸드 정산 완료] Hero 잔액: " + hero.getAccount() + " | Villain 잔액: " + villan.getAccount());
+
+			// 6. 다음 판 진행 여부 확인 및 딜러 버튼 교대
+			if (!askNextHand()) break;
+			dealerIdx = 1 - dealerIdx; // 0과 1을 번갈아가며 스위칭
+			handCount++;
+		} // 무한 루프 끝
 	}
     
 	public HandResult evaluatehands(List<Card> totalCards) {
