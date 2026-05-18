@@ -41,6 +41,7 @@ public class HoldemGame {
 		return false;
 	}
 
+	
 	public void bettingRound(String roundName) {
 		System.out.println("\n=== [" + roundName + " 베팅 시작] ===");
         
@@ -48,6 +49,7 @@ public class HoldemGame {
         
 		int currentHighestBet = 0;
 		boolean actionNeeded = true;
+		boolean firstRound = true; // 🔥 [핵심 수정] 첫 바퀴인지 기억하는 변수 추가!
         
 		while (actionNeeded) {
 			actionNeeded = false;
@@ -56,7 +58,8 @@ public class HoldemGame {
 				if (p.isFold()) continue;
 				if (checkFoldGameEnd()) return;
                 
-				if (p.getCurrentBet() < currentHighestBet || currentHighestBet == 0) {
+				// 🔥 [핵심 수정] 첫 바퀴이거나, 내가 낸 돈이 최고액보다 적을 때만 행동!
+				if (p.getCurrentBet() < currentHighestBet || (currentHighestBet == 0 && firstRound)) {
 					actionNeeded = true;
                     
 					System.out.println("\n▶ [" + p.getName() + "]님의 차례 (잔액: " + p.getAccount() + ")");
@@ -104,11 +107,12 @@ public class HoldemGame {
 						p.bet(totalToPay);
 						pot += totalToPay;
                         
-						currentHighestBet = p.getCurrentBet();
+						currentHighestBet = p.getCurrentBet(); // 여기서 최고 베팅액이 올라감!
 						System.out.println(p.getName() + " 레이즈! (지불: " + totalToPay + " | 팟: " + pot + ")");
 					}
 				}
 			}
+			firstRound = false; // 🔥 [핵심 수정] 한 바퀴를 다 돌았으면 이제 첫 바퀴가 아님!
 			if (currentHighestBet == 0 && !actionNeeded) break; 
 		}
 	}
